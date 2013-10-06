@@ -1,0 +1,155 @@
+#!/usr/bin/env node
+/*
+	TODO : 
+
+
+		work on minification + timestamp for cache management
+
+		work on logs
+
+		work on kill - uninstall
+
+		work on force port (if address already in use : force kill on process who use it before launching new instance)
+ */
+
+var rootPath = "/home/git/deployed/";
+
+var deep = require("deep/deep");
+var argv = require('optimist')
+    .usage('deploy app instance.\nUsage example : $0 --branch branchName \nSee optimist page for more infos (https://github.com/substack/node-optimist).')
+    .alias('b', 'branch')
+    .describe('b', 'give branch name to deploy. will seek in script directory any json that gives deployement settings')
+    .alias('r', 'repository')
+    .describe('r', 'give repository path')
+    .alias('c', 'conf')
+    .describe('c', 'give configuration json')
+    .argv;
+
+require('shelljs/global');
+console.log("deploy : arguments : ", argv);
+if(!argv.conf || !argv.branch || !argv.repository)
+{
+	echo("need arguments : --conf <json> --branch <branch> --repository <repo> ");
+	exit(1);
+}
+//console.log("__dirname : ",__dirname);
+console.log("deploy : branch : ",argv.branch, " - of : ",argv.repository);
+
+var settings = JSON.parse(argv.conf);
+settings.root = rootPath+settings.name;
+settings.branch = argv.branch;
+
+console.log("conf : ", settings);
+exec('echo "whoami : $(whoami)"');
+if (!which('git'))
+{
+  echo('Sorry, this script requires git');
+  exit(1);
+}
+
+
+var repo = argv.repository || settings.repository;
+
+if(typeof settings.deploy !== 'undefined' && settings.deploy === false)
+{
+	console.log("nothing to deploy : exit")
+	exit(0);
+}
+
+function refreshScripts()
+{ 
+	console.log("refresh start/stop/monit scripts");
+	//___________________ REFRESH SCRIPTS WITH ANY CHANGES FROM JSON
+	deep.utils.interpret(cat(__dirname+"/tpl/start.tpl"), settings).to(settings.root+"/start.sh");
+	deep.utils.interpret(cat(__dirname+"/tpl/stop.tpl"), settings).to(settings.root+"/stop.sh");
+	deep.utils.interpret(cat(__dirname+"/tpl/monit.tpl"), settings).to(settings.root+"/monit.conf");
+	
+	chmod(750, settings.root+"/start.sh");
+	chmod(750, settings.root+"/stop.sh");
+	//chmod(644, settings.root+"/monit.conf");
+}
+
+//_________________________________________________________________________ BRANCH FILES CREATION
+if(!test('-e', settings.root))  // test if branch folder exists
+{
+	console.log("deploy folder wasn't there : create it")
+	// _________________________ create branch 
+	mkdir('-p', settings.root);
+	cd(settings.root);
+	mkdir('-p', settings.src);
+
+	refreshScripts();
+
+	cd(settings.src);
+
+	//env["GIT_DIR"]=pwd();
+	console.log("clone repo : pwd : ",pwd(), " - gitdir : ", env["GIT_DIR"]);
+	var cloned = exec('git clone '+repo+ " . ");
+	if (cloned.code !== 0) 
+	{
+  		console.log('Error: Git clone failed : ', clone.code);
+		exit(1);
+	}
+
+	//console.log("before checkout : files :  ", ls("-A"));
+	console.log("checkout repo with : ",argv.branch);
+
+	env["GIT_DIR"]=".git";
+	if (exec('git checkout -f '+argv.branch).code !== 0) 
+	{
+  		console.log('Error: Git checkout failed');
+		exit(1);
+	}
+}
+else
+{
+	//_________________________________________________________________________ BRANCH FILES UPDATE
+	//_______________________________________________________ branch is already created : just pull it
+	console.log("deploy folder was already there : refresh with pull");
+	cd(settings.root+"/"+settings.src);
+	// hack to make git workable in hooks : see http://stackoverflow.com/questions/10507942/git-checkout-in-post-receive-hook-not-a-git-repository
+	env["GIT_DIR"]=".git";
+	//console.log("pull repo : pwd : ", pwd(), " - gitdir : ", env["GIT_DIR"]);
+	//console.log("before pull : files :  ", ls("-A"));
+
+	var pulled = exec('git pull origin '+argv.branch);
+	if (pulled.code !== 0)
+	{
+		console.log('Error: Git pull failed : code : ', pulled.code);
+		exit(1);
+	}
+}
+//__________________________________________________________________ SUBMODULES UPDATES/INIT
+if(settings.updateSubmodules !== false)
+{
+	console.log("submodules update --init");
+	if (exec('git submodule update --init').code !== 0) 
+	{
+  		console.log('Error: Git submodule update failed');
+		exit(1);
+	}
+}
+if(settings.updateScripts !== false)
+	refreshScripts();
+
+//__________________________________________________________________ LAUNCH START
+console.log("will fire start script : ",settings.root+"/start.sh");
+var started = exec(settings.root+"/start.sh").code;
+if(started !== 0)
+{
+	console.log("error while launching start scripts : ",started);
+	exit(1);
+}
+
+//__________________________________________________________________ UPDATE MONIT
+if(settings.updateMonit === true)
+{
+	var monited =  exec(__dirname+"/update-monit.sh "+settings.name+ " "+settings.root+"/monit.conf").code;
+	if(monited !== 0)
+	{
+		console.log("monit update failed : ",monited);
+		exit(0); // do not return error code for this : just warning
+	}
+}
+
+exit(0);

@@ -1,0 +1,28 @@
+#installation serveur
+
+##requis
+
+- git
+- sshd
+- gitreceive
+- nvm
+- mongo
+- elastic
+- monit
+- nginx
+- deployer
+- sshcommand
+
+- logs reader?
+
+
+##attention
+
+nvm, monit
+
+
+##monit
+
+	mongo
+	instances node
+	nginx

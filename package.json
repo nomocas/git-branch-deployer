@@ -1,0 +1,18 @@
+{
+  "name": "smart-deployer",
+  "version": "0.2.1",
+  "author": "Gilles Coomans",
+  "description": "nodejs scripts for deploying gitted node+monit+nginx-vhost app instances",
+  "licenses": [],
+  "repository": {
+    "type":"git",
+    "url":"ssh://git@dev.ubik.be/deployer"
+  },
+  "dependencies": {
+    "deep": "git+ssh://git@dev.ubik.be/deep#0.9.3.1",
+    "amdefine": ">=0.0.8",
+    "optimist": ">=0.3.1",
+    "shelljs":"*"
+  },
+  "main": "./deploy"
+}
