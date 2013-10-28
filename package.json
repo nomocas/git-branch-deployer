@@ -9,7 +9,7 @@
     "url":"ssh://git@dev.ubik.be/deployer"
   },
   "dependencies": {
-    "deep": "git+ssh://git@dev.ubik.be/deep#0.9.3.1",
+    "deep":"https://github.com/deepjs/deepjs.git",
     "amdefine": ">=0.0.8",
     "optimist": ">=0.3.1",
     "shelljs":"*"
